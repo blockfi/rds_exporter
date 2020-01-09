@@ -1,0 +1,76 @@
+version: 2.1
+
+executors:
+  baseline_executor: # Baseline executor used by all the jobs
+    working_directory: ~/rds_exporter
+
+    docker:
+      - image: circleci/buildpack-deps:stretch
+
+commands:
+  # Push to GitHub
+  docker_push: # Push the image to GitHub, tagging as necessary
+    description: "Push the image to GitHub"
+    steps:
+      - run:
+          name: Push images to GitHub Package Repo
+          command: |
+            set +o pipefail
+
+            # Login to GitHub
+            docker login docker.pkg.github.com -u blockfiops -p $GITHUB_DOCKER_TOKEN
+
+            # Push all the other branches anyhow
+            docker tag ${CIRCLE_PROJECT_REPONAME} docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
+            docker push docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
+
+            docker tag ${CIRCLE_PROJECT_REPONAME} docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:latest
+            docker push docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:latest
+
+            if [ "$CIRCLE_TAG" != "" ]; then
+              docker tag ${CIRCLE_PROJECT_REPONAME} docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
+              docker push docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
+            fi
+            docker logout
+#
+# JOBS START HERE
+#
+jobs:
+  # Build and push the Docker
+  docker_build_and_push:
+    executor: baseline_executor
+
+    steps:
+      - checkout
+
+      - setup_remote_docker:
+          version: 18.03.1-ce
+
+      - run:
+          name: Make containers
+          command: |
+            # Make sure that _build and deps exists
+            # In case the cache didn't hit
+            mkdir -p _build deps
+            docker build -t ${CIRCLE_PROJECT_REPONAME} --build-arg AWS_ACCESS_KEY=$AWS_ACCESS_KEY_ID --build-arg AWS_SECRET_KEY=$AWS_SECRET_ACCESS_KEY -f Dockerfile .
+
+      - docker_push
+
+#
+# WORKFLOWS START HERE
+#
+
+# The flow is
+#
+# start--|
+#        |--------------------docker_build_and_push
+#
+workflows:
+  version: 2.1
+  commit-workflow:
+    jobs:
+      - docker_build_and_push:
+          context: blockfi_global
+          filters:
+            tags:
+              only: /.*/

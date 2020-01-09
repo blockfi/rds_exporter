@@ -2,5 +2,3 @@
 .envrc
 /.idea/
 /.vscode/
-rds_exporter
-config.yml
