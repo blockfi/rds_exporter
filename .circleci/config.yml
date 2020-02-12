@@ -8,30 +8,35 @@ executors:
       - image: circleci/buildpack-deps:stretch
 
 commands:
-  # Push to GitHub
-  docker_push: # Push the image to GitHub, tagging as necessary
-    description: "Push the image to GitHub"
+  # Push to ECR
+  docker_push: # Push the image to ECR, tagging as necessary
+    description: "Push the image to ECR"
     steps:
       - run:
-          name: Push images to GitHub Package Repo
+          name: Push images to ECR
           command: |
             set +o pipefail
 
-            # Login to GitHub
-            docker login docker.pkg.github.com -u blockfiops -p $GITHUB_DOCKER_TOKEN
+            # Install aws_cli
+            sudo apt-get -y -qq update
+            sudo apt-get -y -qq install python3-pip python3-dev
+            pip3 install awscli
+
+            # Login to AWS ECR
+            $(aws ecr get-login --no-include-email --region us-east-1)
 
             # Push all the other branches anyhow
-            docker tag ${CIRCLE_PROJECT_REPONAME} docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
-            docker push docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
+            docker tag ${CIRCLE_PROJECT_REPONAME} 190058502420.dkr.ecr.us-east-1.amazonaws.com/blockfi/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
+            docker push 190058502420.dkr.ecr.us-east-1.amazonaws.com/blockfi/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
 
-            docker tag ${CIRCLE_PROJECT_REPONAME} docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:latest
-            docker push docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:latest
+            docker tag ${CIRCLE_PROJECT_REPONAME} 190058502420.dkr.ecr.us-east-1.amazonaws.com/blockfi/${CIRCLE_PROJECT_REPONAME}:latest
+            docker push 190058502420.dkr.ecr.us-east-1.amazonaws.com/blockfi/${CIRCLE_PROJECT_REPONAME}:latest
 
             if [ "$CIRCLE_TAG" != "" ]; then
-              docker tag ${CIRCLE_PROJECT_REPONAME} docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
-              docker push docker.pkg.github.com/blockfi/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
+              docker tag ${CIRCLE_PROJECT_REPONAME} 190058502420.dkr.ecr.us-east-1.amazonaws.com/blockfi/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
+              docker push 190058502420.dkr.ecr.us-east-1.amazonaws.com/blockfi/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
             fi
-            docker logout
+            docker logout https://190058502420.dkr.ecr.us-east-1.amazonaws.com
 #
 # JOBS START HERE
 #
@@ -45,6 +50,7 @@ jobs:
 
       - setup_remote_docker:
           version: 18.03.1-ce
+          docker_layer_caching: true
 
       - run:
           name: Make containers
